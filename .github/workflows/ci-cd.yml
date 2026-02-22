@@ -70,6 +70,8 @@ jobs:
       
       - name: Build application
         working-directory: ./client
+        env:
+          GENERATE_SOURCEMAP: false
         run: npm run build
       
       - name: Run tests
