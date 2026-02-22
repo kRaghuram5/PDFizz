@@ -25,6 +25,7 @@ python-pptx==0.6.21
 
 # Development & Utilities
 python-dotenv==1.0.0
+gunicorn==21.2.0
 
 # Cloud Storage - Azure Blob Storage
 azure-storage-blob==12.19.0
