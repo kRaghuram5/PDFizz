@@ -40,7 +40,8 @@ export const convertFiles = async (files, operation, params = {}) => {
     
     // Add operation parameters
     Object.keys(params).forEach(key => {
-      formData.append(key, params[key]);
+      const val = params[key];
+      formData.append(key, (typeof val === 'object' && val !== null) ? JSON.stringify(val) : val);
     });
     
     const response = await fetch(`${API_BASE_URL}/api/convert`, {

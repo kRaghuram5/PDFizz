@@ -22,7 +22,8 @@ from utils.pdf_converter import (
     pdf_to_word, pdf_to_text, pdf_to_images,
     word_to_pdf, text_to_pdf, images_to_pdf,
     extract_images_from_pdf, reverse_pdf, merge_pdfs,
-    split_pdf, compress_pdf, rotate_pdf, add_watermark, remove_pages,
+    split_pdf, split_pdf_custom_ranges, split_pdf_fixed, split_pdf_extract_pages,
+    compress_pdf, rotate_pdf, add_watermark, remove_pages,
     pdf_to_powerpoint, 
     add_page_numbers, repair_pdf
 )
@@ -247,6 +248,14 @@ def convert_file():
         # Extract base filename from first file for smart naming
         base_filename = secure_filename(files[0].filename)
         base_name = os.path.splitext(base_filename)[0]  # Remove extension
+        # Strip known operation suffixes so re-processing doesn't double them
+        _OP_SUFFIXES = ('_rotated','_watermarked','_removed','_numbered','_compressed',
+                        '_reversed','_merged','_split','_word','_text','_repaired',
+                        '_presentation')
+        for _sfx in _OP_SUFFIXES:
+            if base_name.endswith(_sfx):
+                base_name = base_name[:-len(_sfx)]
+                break
         
         # Save uploaded files (to local storage and Azure)
         saved_files = []
@@ -313,10 +322,34 @@ def convert_file():
         elif operation == 'split_pdf':
             if not allowed_file(saved_files[0], 'pdf'):
                 return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
-            start_page = request.form.get('start_page', 1, type=int)
-            end_page = request.form.get('end_page', 1, type=int)
-            output_file = split_pdf(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, start_page, end_page)
-            output_file = smart_rename_output(output_file, f"{base_name}_split")
+            split_mode = request.form.get('split_mode', 'range')
+            
+            if split_mode == 'custom_ranges':
+                import json
+                ranges_json = request.form.get('ranges', '[]')
+                ranges = json.loads(ranges_json)
+                if not ranges:
+                    return jsonify({'error': 'No ranges specified'}), 400
+                merge_ranges = request.form.get('merge_ranges', 'false') == 'true'
+                output_file = split_pdf_custom_ranges(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, ranges, merge=merge_ranges)
+                output_file = smart_rename_output(output_file, f"{base_name}_split")
+            elif split_mode == 'fixed':
+                num_parts = request.form.get('num_parts', 2, type=int)
+                output_file = split_pdf_fixed(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, num_parts)
+                output_file = smart_rename_output(output_file, f"{base_name}_split")
+            elif split_mode == 'extract_pages':
+                import json
+                pages_json = request.form.get('selected_pages', '[]')
+                pages = json.loads(pages_json)
+                if not pages:
+                    return jsonify({'error': 'No pages selected'}), 400
+                output_file = split_pdf_extract_pages(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, pages)
+                output_file = smart_rename_output(output_file, f"{base_name}_split")
+            else:
+                start_page = request.form.get('start_page', 1, type=int)
+                end_page = request.form.get('end_page', 1, type=int)
+                output_file = split_pdf(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, start_page, end_page)
+                output_file = smart_rename_output(output_file, f"{base_name}_split")
         
         elif operation == 'compress_pdf':
             if not allowed_file(saved_files[0], 'pdf'):
@@ -335,15 +368,40 @@ def convert_file():
             if not allowed_file(saved_files[0], 'pdf'):
                 return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
             watermark_text = request.form.get('watermark', 'Watermark')
-            output_file = add_watermark(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, watermark_text)
+            wm_position    = request.form.get('wm_position', 'center')
+            wm_font        = request.form.get('wm_font', 'helv')
+            wm_color       = request.form.get('wm_color', '#888888')
+            wm_size        = int(request.form.get('wm_size', '36') or '36')
+            output_file = add_watermark(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id,
+                                        watermark_text, position=wm_position, font=wm_font,
+                                        color=wm_color, font_size=wm_size)
             output_file = smart_rename_output(output_file, f"{base_name}_watermarked")
         
         elif operation == 'remove_pages':
             if not allowed_file(saved_files[0], 'pdf'):
                 return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
-            pages = request.form.get('pages', '1')
-            pages_to_remove = [int(p.strip()) for p in pages.split(',') if p.strip()]
-            output_file = remove_pages(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, pages_to_remove)
+            import json as _json
+            rm_tab = request.form.get('rm_tab', 'pages')
+            pages_to_remove = set()
+            if rm_tab == 'range':
+                try:
+                    ranges = _json.loads(request.form.get('rm_ranges', '[]'))
+                    for r in ranges:
+                        s = int(r.get('start') or 0)
+                        e = int(r.get('end')   or 0)
+                        for p in range(min(s, e), max(s, e) + 1):
+                            if p > 0:
+                                pages_to_remove.add(p)
+                except Exception:
+                    pass
+            else:
+                for p in request.form.get('pages', '').split(','):
+                    p = p.strip()
+                    if p.isdigit():
+                        pages_to_remove.add(int(p))
+            if not pages_to_remove:
+                return jsonify({'error': 'No valid pages specified to remove'}), 400
+            output_file = remove_pages(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id, list(pages_to_remove))
             output_file = smart_rename_output(output_file, f"{base_name}_removed")
         
         elif operation == 'pdf_to_powerpoint':
@@ -355,7 +413,10 @@ def convert_file():
         elif operation == 'add_page_numbers':
             if not allowed_file(saved_files[0], 'pdf'):
                 return jsonify({'error': 'Invalid file type. Please upload a PDF file.'}), 400
-            output_file = add_page_numbers(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id)
+            pn_position = request.form.get('pn_position', 'footer-center')
+            pn_size     = int(request.form.get('pn_size', '10') or '10')
+            output_file = add_page_numbers(saved_files[0], app.config['OUTPUT_FOLDER'], unique_id,
+                                           position=pn_position, font_size=pn_size)
             output_file = smart_rename_output(output_file, f"{base_name}_numbered")
         
         elif operation == 'repair_pdf':

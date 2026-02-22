@@ -540,6 +540,167 @@ def split_pdf(pdf_path, output_folder, unique_id, start_page, end_page):
         raise Exception(f"PDF splitting failed: {str(e)}")
 
 
+def split_pdf_custom_ranges(pdf_path, output_folder, unique_id, ranges, merge=False):
+    """
+    Split a PDF into multiple PDFs based on custom page ranges.
+    
+    Args:
+        pdf_path: Path to input PDF file
+        output_folder: Directory to save output files
+        unique_id: Unique identifier
+        ranges: List of dicts with 'from' and 'to' keys (1-based, inclusive)
+        merge: If True, merge all ranges into a single PDF instead of separate files
+    
+    Returns:
+        Path to output file (single PDF if merge=True or single range, ZIP otherwise)
+    """
+    try:
+        reader = PyPDF2.PdfReader(pdf_path)
+        total_pages = len(reader.pages)
+        
+        # Create a temp directory for the split PDFs
+        temp_dir = os.path.join(output_folder, f"{unique_id}_split_parts")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        part_files = []
+        for idx, r in enumerate(ranges, 1):
+            start = max(0, int(r.get('from', 1)) - 1)
+            end = min(total_pages, int(r.get('to', total_pages)))
+            
+            writer = PyPDF2.PdfWriter()
+            for page_num in range(start, end):
+                writer.add_page(reader.pages[page_num])
+            
+            part_filename = f"part_{idx}_pages_{start+1}-{end}.pdf"
+            part_path = os.path.join(temp_dir, part_filename)
+            with open(part_path, 'wb') as f:
+                writer.write(f)
+            part_files.append(part_path)
+        
+        # If merge flag is set, combine all ranges into one PDF
+        if merge and len(part_files) > 1:
+            merged_writer = PyPDF2.PdfWriter()
+            for part_path in part_files:
+                part_reader = PyPDF2.PdfReader(part_path)
+                for page in part_reader.pages:
+                    merged_writer.add_page(page)
+            merged_output = os.path.join(output_folder, f"{unique_id}_split_merged.pdf")
+            with open(merged_output, 'wb') as f:
+                merged_writer.write(f)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return merged_output
+        
+        # If only one range, return the single PDF
+        if len(part_files) == 1:
+            single_output = os.path.join(output_folder, f"{unique_id}_split.pdf")
+            shutil.move(part_files[0], single_output)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return single_output
+        
+        # Multiple ranges: zip them
+        zip_path = os.path.join(output_folder, f"{unique_id}_split.zip")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for part_path in part_files:
+                zf.write(part_path, os.path.basename(part_path))
+        
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return zip_path
+    except Exception as e:
+        raise Exception(f"PDF custom range split failed: {str(e)}")
+
+
+def split_pdf_fixed(pdf_path, output_folder, unique_id, num_parts):
+    """
+    Split a PDF into N equal (or near-equal) parts.
+    
+    Args:
+        pdf_path: Path to input PDF file
+        output_folder: Directory to save output files
+        unique_id: Unique identifier
+        num_parts: Number of parts to split into
+    
+    Returns:
+        Path to a ZIP file containing all split PDFs
+    """
+    try:
+        reader = PyPDF2.PdfReader(pdf_path)
+        total_pages = len(reader.pages)
+        num_parts = max(1, min(int(num_parts), total_pages))
+        
+        pages_per_part = total_pages // num_parts
+        remainder = total_pages % num_parts
+        
+        temp_dir = os.path.join(output_folder, f"{unique_id}_split_parts")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        part_files = []
+        current_page = 0
+        for i in range(num_parts):
+            # Distribute remainder pages across first parts
+            part_size = pages_per_part + (1 if i < remainder else 0)
+            
+            writer = PyPDF2.PdfWriter()
+            for j in range(part_size):
+                writer.add_page(reader.pages[current_page])
+                current_page += 1
+            
+            start_pg = current_page - part_size + 1
+            end_pg = current_page
+            part_filename = f"part_{i+1}_pages_{start_pg}-{end_pg}.pdf"
+            part_path = os.path.join(temp_dir, part_filename)
+            with open(part_path, 'wb') as f:
+                writer.write(f)
+            part_files.append(part_path)
+        
+        if len(part_files) == 1:
+            single_output = os.path.join(output_folder, f"{unique_id}_split.pdf")
+            shutil.move(part_files[0], single_output)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return single_output
+        
+        zip_path = os.path.join(output_folder, f"{unique_id}_split.zip")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for part_path in part_files:
+                zf.write(part_path, os.path.basename(part_path))
+        
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return zip_path
+    except Exception as e:
+        raise Exception(f"PDF fixed split failed: {str(e)}")
+
+
+def split_pdf_extract_pages(pdf_path, output_folder, unique_id, pages):
+    """
+    Extract specific selected pages from a PDF into a new PDF.
+    
+    Args:
+        pdf_path: Path to input PDF file
+        output_folder: Directory to save output file
+        unique_id: Unique identifier
+        pages: List of 1-based page numbers to extract
+    
+    Returns:
+        Path to the extracted PDF file
+    """
+    try:
+        reader = PyPDF2.PdfReader(pdf_path)
+        total_pages = len(reader.pages)
+        
+        writer = PyPDF2.PdfWriter()
+        for page_num in sorted(set(pages)):
+            if 1 <= page_num <= total_pages:
+                writer.add_page(reader.pages[page_num - 1])
+        
+        output_filename = f"{unique_id}_split.pdf"
+        output_path = os.path.join(output_folder, output_filename)
+        with open(output_path, 'wb') as f:
+            writer.write(f)
+        
+        return output_path
+    except Exception as e:
+        raise Exception(f"PDF page extraction failed: {str(e)}")
+
+
 def compress_pdf(pdf_path, output_folder, unique_id):
     """
     Compress PDF by removing redundant streams and optimizing content
@@ -573,71 +734,124 @@ def compress_pdf(pdf_path, output_folder, unique_id):
 
 def rotate_pdf(pdf_path, output_folder, unique_id, rotation):
     """
-    Rotate all pages in a PDF
-    
-    Args:
-        pdf_path: Path to input PDF file
-        output_folder: Directory to save output file
-        unique_id: Unique identifier for the file
-        rotation: Rotation angle (90, 180, or 270 degrees)
-    
-    Returns:
-        Path to the rotated PDF file
+    Rotate all pages in a PDF (supports any angle including custom angles).
+    Uses PyMuPDF for arbitrary angles; falls back to PyPDF2 for multiples of 90.
     """
+    import math
     try:
+        angle = int(rotation) % 360
         output_filename = f"{unique_id}_rotated.pdf"
         output_path = os.path.join(output_folder, output_filename)
-        
-        reader = PyPDF2.PdfReader(pdf_path)
-        writer = PyPDF2.PdfWriter()
-        
-        for page in reader.pages:
-            page.rotate(int(rotation))
-            writer.add_page(page)
-        
-        with open(output_path, 'wb') as output_file:
-            writer.write(output_file)
-        
+
+        if HAVE_FITZ:
+            doc = fitz.open(pdf_path)
+            new_doc = fitz.open()
+
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                w, h = page.rect.width, page.rect.height
+
+                # Determine new page dimensions
+                if angle in (90, 270):
+                    new_w, new_h = h, w
+                elif angle == 180 or angle == 0:
+                    new_w, new_h = w, h
+                else:
+                    rad = math.radians(angle)
+                    new_w = abs(w * math.cos(rad)) + abs(h * math.sin(rad))
+                    new_h = abs(w * math.sin(rad)) + abs(h * math.cos(rad))
+
+                new_page = new_doc.new_page(width=new_w, height=new_h)
+                new_page.show_pdf_page(new_page.rect, doc, page_num, rotate=angle)
+
+            new_doc.save(output_path)
+            new_doc.close()
+            doc.close()
+        else:
+            # Fallback: PyPDF2 only supports multiples of 90
+            snap = round(angle / 90) * 90 % 360
+            reader = PyPDF2.PdfReader(pdf_path)
+            writer = PyPDF2.PdfWriter()
+            for page in reader.pages:
+                page.rotate(snap)
+                writer.add_page(page)
+            with open(output_path, 'wb') as f:
+                writer.write(f)
+
         return output_path
     except Exception as e:
         raise Exception(f"PDF rotation failed: {str(e)}")
 
 
-def add_watermark(pdf_path, output_folder, unique_id, watermark_text):
+def add_watermark(pdf_path, output_folder, unique_id, watermark_text,
+                  position='center', font='helv', color='#888888', font_size=36):
     """
-    Add text watermark to all pages in a PDF
-    
-    Args:
-        pdf_path: Path to input PDF file
-        output_folder: Directory to save output file
-        unique_id: Unique identifier for the file
-        watermark_text: Text to add as watermark
-    
-    Returns:
-        Path to the watermarked PDF file
+    Add text watermark to all pages in a PDF.
+    position: top-left / top-center / top-right /
+              center-left / center / center-right /
+              bottom-left / bottom-center / bottom-right
+    font: helv (Helvetica) | tiro (Times) | cour (Courier)
+    color: hex string e.g. '#888888'
+    font_size: integer
     """
     if not HAVE_FITZ:
         raise Exception("PyMuPDF (fitz) is not installed. Install it with: python -m pip install PyMuPDF")
-    
     try:
         output_filename = f"{unique_id}_watermarked.pdf"
         output_path = os.path.join(output_folder, output_filename)
-        
+
+        # Parse hex color
+        hex_c = color.lstrip('#')
+        if len(hex_c) == 3:
+            hex_c = ''.join(c*2 for c in hex_c)
+        r = int(hex_c[0:2], 16) / 255
+        g = int(hex_c[2:4], 16) / 255
+        b = int(hex_c[4:6], 16) / 255
+        rgb = (r, g, b)
+
+        font_size = int(font_size)
+        parts = position.split('-')
+        vert  = parts[0]                           # top / center / bottom
+        horiz = parts[1] if len(parts) > 1 else 'center'  # left / center / right
+
+        align_map = {'left': 0, 'center': 1, 'right': 2}
+        align = align_map.get(horiz, 1)
+
         doc = fitz.open(pdf_path)
-        
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            # Add watermark text to center of page
-            page.insert_text(
-                (page.rect.width / 2, page.rect.height / 2),
-                watermark_text,
-                fontsize=48,
-                color=(0.7, 0.7, 0.7)  # Light gray color
-            )
-        
+        for page in doc:
+            pw = page.rect.width
+            ph = page.rect.height
+            margin = 24
+
+            if vert == 'top':
+                y = margin + font_size
+            elif vert == 'bottom':
+                y = ph - margin
+            else:  # center
+                y = ph / 2
+
+            if vert == 'center' and horiz == 'center':
+                # Diagonal watermark — use TextWriter with morph for arbitrary rotation
+                font_obj  = fitz.Font(fontname=font)
+                tw        = fitz.TextWriter(page.rect, color=rgb)
+                # Estimate half-width to roughly center the baseline
+                half_w    = len(watermark_text) * font_size * 0.28
+                origin    = fitz.Point(pw / 2 - half_w, ph / 2)
+                tw.append(origin, watermark_text, font=font_obj, fontsize=font_size)
+                pivot = fitz.Point(pw / 2, ph / 2)
+                tw.write_text(page, morph=(pivot, fitz.Matrix(-45)))
+            else:
+                rect = fitz.Rect(margin, y - font_size - 2, pw - margin, y + 4)
+                page.insert_textbox(
+                    rect, watermark_text,
+                    fontname=font,
+                    fontsize=font_size,
+                    color=rgb,
+                    align=align,
+                )
+
         doc.save(output_path)
         doc.close()
-        
         return output_path
     except Exception as e:
         raise Exception(f"Watermark addition failed: {str(e)}")
@@ -825,38 +1039,57 @@ def excel_to_pdf(excel_path, output_folder, unique_id):
         raise Exception(f"Excel to PDF conversion failed: {str(e)}")
 
 
-def add_page_numbers(pdf_path, output_folder, unique_id):
+
+def add_page_numbers(pdf_path, output_folder, unique_id, position='footer-center', font_size=10):
     """
-    Add page numbers to PDF document
-    
-    Args:
-        pdf_path: Path to input PDF file
-        output_folder: Directory to save output file
-        unique_id: Unique identifier for the file
-    
-    Returns:
-        Path to the PDF with page numbers
+    Add page numbers to PDF.
+    position: header-left / header-center / header-right /
+              footer-left / footer-center / footer-right
+    font_size: integer (pt)
     """
     if not HAVE_FITZ:
         raise Exception("PyMuPDF (fitz) is not installed. Install it with: pip install PyMuPDF")
-    
     try:
         output_filename = f"{unique_id}_numbered.pdf"
         output_path = os.path.join(output_folder, output_filename)
-        
+
+        font_size = int(font_size)
+        parts     = position.split('-', 1)
+        section   = parts[0]
+        align_str = parts[1] if len(parts) > 1 else 'center'
+        align_map = {'left': 0, 'center': 1, 'right': 2}
+        align = align_map.get(align_str, 1)
+
         pdf_doc = fitz.open(pdf_path)
-        
+        margin  = 18
         for page_num in range(len(pdf_doc)):
             page = pdf_doc[page_num]
-            # Insert text at bottom right
-            text = f"{page_num + 1}"
-            rect = page.rect
-            point = fitz.Point(rect.width - 50, rect.height - 30)
-            page.insert_text(point, text, fontsize=10, color=(0, 0, 0))
-        
+            pw, ph = page.rect.width, page.rect.height
+            text = str(page_num + 1)
+
+            # Compute x based on alignment
+            if align_str == 'left':
+                x = margin
+            elif align_str == 'right':
+                x = pw - margin
+            else:  # center
+                x = pw / 2
+
+            # Compute y: PyMuPDF insert_text baseline is at the point y
+            if section == 'header':
+                y = margin + font_size
+            else:  # footer
+                y = ph - margin
+
+            page.insert_text(
+                fitz.Point(x, y),
+                text,
+                fontsize=font_size,
+                color=(0, 0, 0),
+            )
+
         pdf_doc.save(output_path)
         pdf_doc.close()
-        
         return output_path
     except Exception as e:
         raise Exception(f"Adding page numbers failed: {str(e)}")

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import HomePage from './components/HomePage';
-import OperationPage from './components/OperationPage';
+import PDFOperationPage from './components/PDFOperationPage';
 import Toast from './components/Toast';
 import { getOperations } from './api';
 
@@ -66,7 +66,7 @@ function App() {
               path={`/${op.id}`} 
               element={
                 currentOperation(op.id) ? (
-                  <OperationPage operation={currentOperation(op.id)} />
+                  <PDFOperationPage operation={currentOperation(op.id)} />
                 ) : (
                   <Navigate to="/" />
                 )
