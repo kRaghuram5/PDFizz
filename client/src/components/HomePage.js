@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import './HomePage.css';
 
-const HomePage = ({ operations }) => {
+const HomePage = ({ operations, backendOnline }) => {
   const [conversionDropdown, setConversionDropdown] = useState(false);
   const [allToolsDropdown, setAllToolsDropdown] = useState(false);
 
@@ -64,7 +64,7 @@ const HomePage = ({ operations }) => {
       {/* Navigation Bar */}
       <nav className="nav-bar">
         <div className="nav-container">
-          <Link to="/" className="logo-nav">ProPDF</Link>
+          <Link to="/" className="logo-nav">PDFizz</Link>
 
           <Link
             to="/merge_pdfs"
@@ -132,6 +132,17 @@ const HomePage = ({ operations }) => {
           </div>
         </div>
       </nav>
+
+      {/* Backend Offline Banner */}
+      {!backendOnline && (
+        <div className="backend-offline-banner">
+          <div className="backend-offline-icon">🔌</div>
+          <div className="backend-offline-text">
+            <strong>Server is not running</strong>
+            <span>The backend service is currently offline. Please start it and refresh the page.</span>
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <div className="hero-section">

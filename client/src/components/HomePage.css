@@ -1,5 +1,5 @@
 /* ============================================================
-   ProPDF – Homepage  (CSS-only redesign, HTML unchanged)
+   PDFizz – Homepage  (CSS-only redesign, HTML unchanged)
    ============================================================ */
 
 /* ─── design tokens ─── */
@@ -501,3 +501,39 @@
   .op-box-name    { font-size: 11px; }
 }
 
+/* ─── Backend Offline Banner ─── */
+.backend-offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 24px auto 0;
+  max-width: 680px;
+  padding: 18px 24px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.12);
+}
+
+.backend-offline-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.backend-offline-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backend-offline-text strong {
+  font-size: 16px;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.backend-offline-text span {
+  font-size: 14px;
+  color: #b45309;
+  line-height: 1.5;
+}

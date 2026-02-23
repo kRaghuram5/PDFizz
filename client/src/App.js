@@ -9,13 +9,15 @@ import { getOperations } from './api';
 function App() {
   const [operations, setOperations] = useState([]);
   const [toasts, setToasts] = useState([]);
+  const [backendOnline, setBackendOnline] = useState(true);
 
   const fetchOperations = useCallback(async () => {
     try {
       const ops = await getOperations();
       setOperations(ops);
+      setBackendOnline(true);
     } catch (error) {
-      addToast('Failed to load operations. Make sure backend is running.', 'error');
+      setBackendOnline(false);
       console.error('Error:', error);
     }
   }, []);
@@ -56,7 +58,7 @@ function App() {
           {/* Home Page */}
           <Route 
             path="/" 
-            element={<HomePage operations={operations} />} 
+            element={<HomePage operations={operations} backendOnline={backendOnline} />} 
           />
           
           {/* Individual Operation Pages */}
