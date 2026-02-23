@@ -326,6 +326,8 @@ const PDFOperationPage = ({ operation }) => {
   const [files, setFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [conversionPhase, setConversionPhase] = useState(null); // null | 'converting' | 'done' | 'downloaded' | 'error'
+  const [errorMsg, setErrorMsg] = useState('');
   const [toasts, setToasts] = useState([]);
   const [operationParams, setOperationParams] = useState({});
   const [reorderDragIdx, setReorderDragIdx] = useState(null);
@@ -469,23 +471,33 @@ const PDFOperationPage = ({ operation }) => {
     }
     try {
       setLoading(true);
-      addToast('Converting your file...', 'info');
+      setConversionPhase('converting');
       const result = await convertFiles(files, operation.id, operationParams);
       if (result.success && result.download_url) {
-        addToast('Conversion completed! Downloading...', 'success');
+        setConversionPhase('done');
         const blobPath = result.download_url.replace('/api/download/', '');
         setTimeout(() => {
           downloadFile(blobPath);
-        }, 500);
-        setFiles([]);
+          setConversionPhase('downloaded');
+        }, 1000);
+        // Don't clear files here — keep them visible while the status panel is shown.
+        // Files are cleared when the user clicks "Convert another file" (handleReset).
       } else {
-        addToast(result.error || 'Conversion failed.', 'error');
+        setConversionPhase('error');
+        setErrorMsg(result.error || 'Conversion failed.');
       }
     } catch (error) {
-      addToast(`Error: ${error.message}`, 'error');
+      setConversionPhase('error');
+      setErrorMsg(error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReset = () => {
+    setConversionPhase(null);
+    setErrorMsg('');
+    setFiles([]);
   };
 
   return (
@@ -567,6 +579,7 @@ const PDFOperationPage = ({ operation }) => {
           />
         ) : (
           <div className="pdf-op-files-area">
+            {!conversionPhase && (<>
             <div className="pdf-op-files-header">
               <h3 className="pdf-op-files-title">
                 {files.length} file{files.length !== 1 ? 's' : ''} selected
@@ -967,24 +980,95 @@ const PDFOperationPage = ({ operation }) => {
               );
             })()}
 
-            {/* Convert Button */}
-            <button
-              className={`pdf-op-convert-btn ${loading ? 'loading' : ''}`}
-              onClick={handleConvert}
-              disabled={loading || files.length === 0}
-              type="button"
-            >
-              {loading ? (
-                <>
-                  <span className="pdf-op-spinner" />
-                  Converting...
-                </>
-              ) : (
-                <>
-                  Convert {files.length > 1 ? `${files.length} files` : 'file'}
-                </>
-              )}
-            </button>
+            </>)}
+
+            {/* Conversion Status / Convert Button */}
+            {conversionPhase ? (
+              <div className="pdf-op-status-panel">
+                {conversionPhase === 'converting' && (
+                  <div className="pdf-op-status pdf-op-status--converting">
+                    <div className="pdf-op-status-icon-wrap">
+                      <div className="pdf-op-pulse-ring" />
+                      <div className="pdf-op-spinner-lg" />
+                    </div>
+                    <div className="pdf-op-status-body">
+                      <div className="pdf-op-status-title-row">
+                        <span className="pdf-op-status-title">Converting your file</span>
+                        <span className="pdf-op-status-dots"><span>.</span><span>.</span><span>.</span></span>
+                      </div>
+                      <span className="pdf-op-status-sub">Please wait, this may take a moment</span>
+                      <div className="pdf-op-progress-bar"><div className="pdf-op-progress-fill" /></div>
+                    </div>
+                  </div>
+                )}
+                {conversionPhase === 'done' && (
+                  <div className="pdf-op-status pdf-op-status--done">
+                    <div className="pdf-op-status-icon-wrap pdf-op-check-wrap">
+                      <svg className="pdf-op-check-svg" viewBox="0 0 52 52">
+                        <circle className="pdf-op-check-circle" cx="26" cy="26" r="24" />
+                        <path className="pdf-op-check-tick" d="M14 27l8 8 16-16" />
+                      </svg>
+                    </div>
+                    <div className="pdf-op-status-body">
+                      <span className="pdf-op-status-title">Conversion complete!</span>
+                      <span className="pdf-op-status-sub">Preparing your download...</span>
+                    </div>
+                  </div>
+                )}
+                {conversionPhase === 'downloaded' && (
+                  <div className="pdf-op-status pdf-op-status--downloaded">
+                    <div className="pdf-op-status-icon-wrap pdf-op-dl-wrap">
+                      <svg viewBox="0 0 52 52" fill="none">
+                        <circle cx="26" cy="26" r="24" fill="none" stroke="var(--accent)" strokeWidth="2.5"/>
+                        <path d="M26 16v16M18 26l8 8 8-8" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M18 36h16" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                    <div className="pdf-op-status-body">
+                      <span className="pdf-op-status-title">Download started!</span>
+                      <span className="pdf-op-status-sub">Your file is ready.</span>
+                      <div className="pdf-op-explore-section">
+                        <p className="pdf-op-explore-prompt">Want to do more with PDFizz?</p>
+                        <div className="pdf-op-explore-btns">
+                          <button type="button" className="pdf-op-explore-btn pdf-op-explore-btn--primary" onClick={handleReset}>
+                            Convert another file
+                          </button>
+                          <Link to="/" className="pdf-op-explore-btn pdf-op-explore-btn--ghost">
+                            Explore more tools →
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {conversionPhase === 'error' && (
+                  <div className="pdf-op-status pdf-op-status--error">
+                    <div className="pdf-op-status-icon-wrap pdf-op-err-wrap">
+                      <svg viewBox="0 0 52 52" fill="none">
+                        <circle cx="26" cy="26" r="24" fill="none" stroke="#ef4444" strokeWidth="2.5"/>
+                        <path d="M20 20l12 12M32 20L20 32" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                    <div className="pdf-op-status-body">
+                      <span className="pdf-op-status-title">Something went wrong</span>
+                      <span className="pdf-op-status-sub">{errorMsg}</span>
+                      <button type="button" className="pdf-op-explore-btn pdf-op-explore-btn--primary" onClick={handleReset} style={{marginTop:14}}>
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                className="pdf-op-convert-btn"
+                onClick={handleConvert}
+                disabled={files.length === 0}
+                type="button"
+              >
+                Convert {files.length > 1 ? `${files.length} files` : 'file'}
+              </button>
+            )}
           </div>
         )}
       </div>

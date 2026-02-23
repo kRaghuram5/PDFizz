@@ -654,6 +654,290 @@
   to { transform: rotate(360deg); }
 }
 
+/* ===== CONVERSION STATUS PANEL ===== */
+.pdf-op-status-panel {
+  margin-top: 8px;
+  animation: pdf-op-fadein 0.25s ease;
+}
+
+@keyframes pdf-op-fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pdf-op-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 14px;
+  animation: pdf-op-status-pop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes pdf-op-status-pop {
+  from { opacity: 0; transform: scale(0.94) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.pdf-op-status--converting {
+  background: color-mix(in srgb, var(--accent) 8%, white);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.pdf-op-status--done {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+}
+
+.pdf-op-status--downloaded {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 28px 24px;
+}
+
+.pdf-op-status--error {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+}
+
+/* --- Icon wrapper --- */
+.pdf-op-status-icon-wrap {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pdf-op-status--downloaded .pdf-op-status-icon-wrap {
+  margin-bottom: 4px;
+}
+
+/* Converting: pulse ring + big spinner */
+.pdf-op-pulse-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0.35;
+  animation: pdf-op-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pdf-op-pulse {
+  0%,100% { transform: scale(0.9);  opacity: 0.4; }
+  50%      { transform: scale(1.12); opacity: 0.12; }
+}
+
+.pdf-op-spinner-lg {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(0,0,0,0.07);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: pdf-op-spin-lg 0.75s linear infinite;
+}
+
+@keyframes pdf-op-spin-lg {
+  to { transform: rotate(360deg); }
+}
+
+/* Done: animated check SVG */
+.pdf-op-check-wrap {
+  width: 52px;
+  height: 52px;
+}
+
+.pdf-op-check-svg {
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+}
+
+.pdf-op-check-circle {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 2;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: pdf-op-circle-draw 0.5s ease-out forwards;
+}
+
+@keyframes pdf-op-circle-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.pdf-op-check-tick {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 38;
+  stroke-dashoffset: 38;
+  animation: pdf-op-tick-draw 0.32s ease-out 0.42s forwards;
+}
+
+@keyframes pdf-op-tick-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Downloaded / Error: bounce-in icon */
+.pdf-op-dl-wrap svg,
+.pdf-op-err-wrap svg {
+  width: 52px;
+  height: 52px;
+  animation: pdf-op-bounce-in 0.45s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes pdf-op-bounce-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* --- Status body text --- */
+.pdf-op-status-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.pdf-op-status--downloaded .pdf-op-status-body {
+  align-items: center;
+  width: 100%;
+}
+
+.pdf-op-status-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.pdf-op-status-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.pdf-op-status--converting .pdf-op-status-title  { color: var(--accent); }
+.pdf-op-status--done .pdf-op-status-title,
+.pdf-op-status--downloaded .pdf-op-status-title  { color: #15803d; }
+.pdf-op-status--error .pdf-op-status-title       { color: #dc2626; }
+
+/* Bouncing dots */
+.pdf-op-status-dots span {
+  display: inline-block;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  animation: pdf-op-dot-bounce 1.2s ease-in-out infinite;
+}
+
+.pdf-op-status-dots span:nth-child(2) { animation-delay: 0.2s; }
+.pdf-op-status-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pdf-op-dot-bounce {
+  0%,80%,100% { transform: translateY(0);   opacity: 0.4; }
+  40%          { transform: translateY(-5px); opacity: 1; }
+}
+
+.pdf-op-status-sub {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Indeterminate progress bar */
+.pdf-op-progress-bar {
+  height: 4px;
+  background: rgba(0,0,0,0.07);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 12px;
+  position: relative;
+}
+
+.pdf-op-progress-fill {
+  position: absolute;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: pdf-op-progress 1.8s ease-in-out infinite;
+}
+
+@keyframes pdf-op-progress {
+  0%   { left: 0%;   width: 5%; }
+  50%  { left: 30%;  width: 55%; }
+  100% { left: 100%; width: 5%; }
+}
+
+/* --- "Want to do more?" explore section --- */
+.pdf-op-explore-section {
+  width: 100%;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(0,0,0,0.07);
+  animation: pdf-op-fadein 0.4s ease 0.1s both;
+}
+
+.pdf-op-explore-prompt {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 14px;
+}
+
+.pdf-op-explore-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.pdf-op-explore-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  line-height: 1;
+}
+
+.pdf-op-explore-btn--primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.pdf-op-explore-btn--primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.pdf-op-explore-btn--ghost {
+  background: white;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+}
+
+.pdf-op-explore-btn--ghost:hover {
+  background: var(--accent-light);
+  transform: translateY(-1px);
+}
+
 /* ===== FOOTER INFO ===== */
 .pdf-op-footer-info {
   display: flex;
