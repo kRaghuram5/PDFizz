@@ -515,19 +515,6 @@ const PDFOperationPage = ({ operation }) => {
         ))}
       </div>
 
-      {/* Top Bar */}
-      <nav className="pdf-op-navbar">
-        <Link to="/" className="pdf-op-back" title="Back to Home">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 10H5M5 10l5-5M5 10l5 5"/>
-          </svg>
-        </Link>
-        <Link to="/" className="pdf-op-logo">
-          <span className="pdf-op-logo-text">PDFizz</span>
-        </Link>
-        <div className="pdf-op-navbar-spacer" />
-      </nav>
-
       {/* Hero Area */}
       <div className="pdf-op-hero">
         <div className="pdf-op-hero-icon">{config.icon}</div>

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 import HomePage from './components/HomePage';
 import PDFOperationPage from './components/PDFOperationPage';
+import Navbar from './components/Navbar';
 import Toast from './components/Toast';
 import { getOperations } from './api';
 
@@ -53,6 +54,8 @@ function App() {
             />
           ))}
         </div>
+
+        <Navbar operations={operations} />
 
         <Routes>
           {/* Home Page */}
