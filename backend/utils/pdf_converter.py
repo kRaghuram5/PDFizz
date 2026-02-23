@@ -814,8 +814,7 @@ def add_watermark(pdf_path, output_folder, unique_id, watermark_text,
         vert  = parts[0]                           # top / center / bottom
         horiz = parts[1] if len(parts) > 1 else 'center'  # left / center / right
 
-        align_map = {'left': 0, 'center': 1, 'right': 2}
-        align = align_map.get(horiz, 1)
+        font_obj = fitz.Font(fontname=font)
 
         doc = fitz.open(pdf_path)
         for page in doc:
@@ -831,24 +830,28 @@ def add_watermark(pdf_path, output_folder, unique_id, watermark_text,
                 y = ph / 2
 
             if vert == 'center' and horiz == 'center':
-                # Diagonal watermark — use TextWriter with morph for arbitrary rotation
-                font_obj  = fitz.Font(fontname=font)
-                tw        = fitz.TextWriter(page.rect, color=rgb)
-                # Estimate half-width to roughly center the baseline
-                half_w    = len(watermark_text) * font_size * 0.28
-                origin    = fitz.Point(pw / 2 - half_w, ph / 2)
+                # Diagonal watermark across the full page
+                tw     = fitz.TextWriter(page.rect, color=rgb)
+                half_w = len(watermark_text) * font_size * 0.28
+                origin = fitz.Point(pw / 2 - half_w, ph / 2)
                 tw.append(origin, watermark_text, font=font_obj, fontsize=font_size)
-                pivot = fitz.Point(pw / 2, ph / 2)
+                pivot  = fitz.Point(pw / 2, ph / 2)
                 tw.write_text(page, morph=(pivot, fitz.Matrix(-45)))
             else:
-                rect = fitz.Rect(margin, y - font_size - 2, pw - margin, y + 4)
-                page.insert_textbox(
-                    rect, watermark_text,
-                    fontname=font,
-                    fontsize=font_size,
-                    color=rgb,
-                    align=align,
-                )
+                # Use TextWriter for all other positions — avoids insert_textbox
+                # silently failing when the bounding rect is too small for the font size.
+                text_width = font_obj.text_length(watermark_text, fontsize=font_size)
+
+                if horiz == 'left':
+                    x = margin
+                elif horiz == 'right':
+                    x = pw - margin - text_width
+                else:  # center
+                    x = (pw - text_width) / 2
+
+                tw = fitz.TextWriter(page.rect, color=rgb)
+                tw.append(fitz.Point(x, y), watermark_text, font=font_obj, fontsize=font_size)
+                tw.write_text(page)
 
         doc.save(output_path)
         doc.close()

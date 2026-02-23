@@ -139,7 +139,7 @@ const HomePage = ({ operations, backendOnline }) => {
           <div className="backend-offline-icon">🔌</div>
           <div className="backend-offline-text">
             <strong>Server is not running</strong>
-            <span>The backend service is currently offline. Please start it and refresh the page.</span>
+            <span>The backend service is currently offline. Wait Untill it Starts and refresh the page.</span>
           </div>
         </div>
       )}
