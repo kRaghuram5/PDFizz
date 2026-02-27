@@ -1,34 +1,51 @@
 """
-PDF Toolkit Web Application
-A Flask-based web application for various PDF operations
+PDF Toolkit – Flask API
+=======================
+This file contains ONLY:
+  • Flask app setup & configuration
+  • API route handlers
+
+All operation logic lives in utils/<operation>.py
+All helper utilities live in utils/app_helpers.py
 """
 
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
 import os
 import uuid
-from datetime import datetime, timedelta
-import threading
-import time
+from datetime import datetime
 from io import BytesIO
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
 
-# Load .env file
 load_dotenv()
 
-# Import utility modules
-from utils.pdf_converter import (
-    pdf_to_word, pdf_to_text, pdf_to_images,
+# ── Operation imports (one module per operation) ─────────────────────────────
+from utils import (
+    # PDF → other formats
+    pdf_to_word, pdf_to_text, pdf_to_images, pdf_to_powerpoint,
+    # other formats → PDF
     word_to_pdf, text_to_pdf, images_to_pdf,
-    extract_images_from_pdf, reverse_pdf, merge_pdfs,
-    split_pdf, split_pdf_custom_ranges, split_pdf_fixed, split_pdf_extract_pages,
-    compress_pdf, rotate_pdf, add_watermark, remove_pages,
-    pdf_to_powerpoint, 
-    add_page_numbers, repair_pdf
+    # PDF page manipulation
+    merge_pdfs, split_pdf, split_pdf_custom_ranges,
+    split_pdf_fixed, split_pdf_extract_pages,
+    reverse_pdf, remove_pages,
+    # PDF transformation
+    compress_pdf, rotate_pdf, add_watermark, add_page_numbers, repair_pdf,
+    # images
+    extract_images_from_pdf,
 )
 
-# Import Azure storage utility
+# ── App helpers ───────────────────────────────────────────────────────────────
+from utils.app_helpers import (
+    allowed_file,
+    save_uploaded_file,
+    save_output_file,
+    smart_rename_output,
+    start_cleanup_thread,
+)
+
+# ── Azure storage ─────────────────────────────────────────────────────────────
 from utils.azure_storage import get_azure_storage
 
 app = Flask(__name__)
@@ -48,136 +65,12 @@ azure_storage = get_azure_storage() if USE_AZURE else None
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 
-# Allowed file extensions
-ALLOWED_EXTENSIONS = {
-    'pdf': ['pdf'],
-    'word': ['doc', 'docx'],
-    'text': ['txt'],
-    'image': ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'tiff', 'tif', 'webp', 'svg', 'ico']
-}
+# (allowed_file, save_uploaded_file, save_output_file, smart_rename_output
+#  are all imported from utils/app_helpers.py at the top of this file)
 
 
-def allowed_file(filename, file_type):
-    """Check if file extension is allowed"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS.get(file_type, [])
-
-
-def save_uploaded_file_to_storage(file, unique_id, app_config):
-    """
-    Save uploaded file to Azure ONLY (not permanently locally)
-    Creates temp file for processing, then uploads to Azure
-    Returns: temp filepath for processing
-    """
-    filename = secure_filename(file.filename)
-    local_filepath = os.path.join(app_config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
-    
-    # Save temporarily for processing
-    file.save(local_filepath)
-    
-    # Upload to Azure
-    if USE_AZURE and azure_storage:
-        try:
-            blob_name = f"uploads/{unique_id}/{filename}"
-            azure_storage.upload_file(local_filepath, blob_name)
-            app.logger.info(f"Uploaded {blob_name} to Azure")
-        except Exception as e:
-            app.logger.error(f"Failed to upload to Azure: {str(e)}")
-            # Continue with processing even if Azure fails (will stay local)
-    
-    # Return temp path for processing (will be deleted after processing)
-    return local_filepath
-
-
-def save_output_file_to_storage(local_filepath, unique_id):
-    """
-    Upload output file to Azure and delete local copy
-    Returns: (local_filename, azure_blob_path) for download
-    """
-    if not local_filepath or not os.path.exists(local_filepath):
-        return None, None
-    
-    filename = os.path.basename(local_filepath)
-    blob_name = f"outputs/{unique_id}/{filename}"
-    
-    # Upload to Azure
-    if USE_AZURE and azure_storage:
-        try:
-            azure_storage.upload_file(local_filepath, blob_name)
-            app.logger.info(f"Uploaded output {blob_name} to Azure")
-        except Exception as e:
-            app.logger.error(f"Failed to upload output to Azure: {str(e)}")
-            # Return local path if Azure fails
-            return filename, None
-    
-    # Delete local file after successfully uploading to Azure
-    try:
-        if os.path.exists(local_filepath):
-            os.remove(local_filepath)
-            app.logger.info(f"Deleted local temp file: {local_filepath}")
-    except Exception as e:
-        app.logger.warning(f"Failed to delete temp file: {str(e)}")
-    
-    return filename, blob_name if USE_AZURE else None
-
-
-def smart_rename_output(output_file, base_name):
-    """Rename output file to use input filename with operation suffix"""
-    if not output_file or not os.path.exists(output_file):
-        return output_file
-    
-    try:
-        # Get file extension
-        _, ext = os.path.splitext(output_file)
-        output_dir = os.path.dirname(output_file)
-        
-        # Create new filename with smart naming
-        new_filename = f"{base_name}{ext}"
-        new_filepath = os.path.join(output_dir, new_filename)
-        
-        # Handle filename conflicts by adding counter
-        counter = 1
-        while os.path.exists(new_filepath):
-            name_parts = base_name.rsplit('_', 1)
-            if len(name_parts) > 1 and name_parts[-1].isdigit():
-                base_without_counter = name_parts[0]
-            else:
-                base_without_counter = base_name
-            new_filename = f"{base_without_counter}_{counter}{ext}"
-            new_filepath = os.path.join(output_dir, new_filename)
-            counter += 1
-        
-        # Rename the file
-        os.rename(output_file, new_filepath)
-        return new_filepath
-    except Exception as e:
-        print(f"Error renaming file: {str(e)}")
-        return output_file
-
-
-def cleanup_old_files():
-    """Remove files older than 1 hour from uploads and outputs folders"""
-    while True:
-        try:
-            current_time = time.time()
-            for folder in [app.config['UPLOAD_FOLDER'], app.config['OUTPUT_FOLDER']]:
-                if os.path.exists(folder):
-                    for filename in os.listdir(folder):
-                        filepath = os.path.join(folder, filename)
-                        if os.path.isfile(filepath):
-                            file_age = current_time - os.path.getmtime(filepath)
-                            if file_age > 3600:  # 1 hour
-                                os.remove(filepath)
-                                print(f"Deleted old file: {filepath}")
-        except Exception as e:
-            print(f"Error during cleanup: {str(e)}")
-        
-        time.sleep(1800)  # Run cleanup every 30 minutes
-
-
-# Start cleanup thread
-cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
-cleanup_thread.start()
+# Start background cleanup thread (deletes files older than 1 h every 30 min)
+start_cleanup_thread(app.config['UPLOAD_FOLDER'], app.config['OUTPUT_FOLDER'])
 
 
 @app.route('/health', methods=['GET'])
@@ -260,7 +153,10 @@ def convert_file():
         # Save uploaded files (to local storage and Azure)
         saved_files = []
         for file in files:
-            filepath = save_uploaded_file_to_storage(file, unique_id, app.config)
+            filepath = save_uploaded_file(
+                file, unique_id, app.config['UPLOAD_FOLDER'],
+                azure_storage=azure_storage, use_azure=USE_AZURE,
+            )
             saved_files.append(filepath)
         
         # Perform the requested operation
@@ -430,7 +326,10 @@ def convert_file():
         
         if output_file and os.path.exists(output_file):
             # Upload output to Azure if enabled
-            filename, blob_name = save_output_file_to_storage(output_file, unique_id)
+            filename, blob_name = save_output_file(
+                output_file, unique_id,
+                azure_storage=azure_storage, use_azure=USE_AZURE,
+            )
             
             # Clean up input files after processing
             for saved_file in saved_files:

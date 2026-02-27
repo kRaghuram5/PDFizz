@@ -5,9 +5,14 @@ Handles file uploads, downloads, and cleanup
 
 import os
 from typing import BinaryIO, Optional
-from azure.storage.blob import BlobServiceClient, BlobClient
-from azure.core.exceptions import AzureError
 import logging
+
+try:
+    from azure.storage.blob import BlobServiceClient, BlobClient
+    from azure.core.exceptions import AzureError
+    HAVE_AZURE = True
+except ImportError:
+    HAVE_AZURE = False
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +179,12 @@ def get_azure_storage() -> Optional[AzureStorageManager]:
     if _azure_storage is None:
         use_azure = os.getenv('USE_AZURE_STORAGE', 'false').lower() == 'true'
         if use_azure:
+            if not HAVE_AZURE:
+                logger.warning(
+                    "USE_AZURE_STORAGE=true but azure-storage-blob is not installed. "
+                    "Install it with:  pip install azure-storage-blob"
+                )
+                return None
             try:
                 _azure_storage = AzureStorageManager()
             except Exception as e:
